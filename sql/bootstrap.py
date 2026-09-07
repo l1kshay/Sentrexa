@@ -31,7 +31,12 @@ from config.settings import PROJECT_ROOT, settings
 
 SCHEMA_DIR = PROJECT_ROOT / "sql" / "schema"
 ENV_PATH = PROJECT_ROOT / ".env"
-SCHEMA_FILES = ["001_core_schema.sql", "002_rejected_records.sql", "003_grants.sql"]
+SCHEMA_FILES = [
+    "001_core_schema.sql",
+    "002_rejected_records.sql",
+    "003_grants.sql",
+    "004_views.sql",
+]
 _SAFE_PW = re.compile(r"^[A-Za-z0-9_-]+$")
 
 

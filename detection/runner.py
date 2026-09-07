@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import insert, update
 
+from alerting.alert_manager import create_alerts
+from alerting.incident_manager import escalate_high_severity
 from db.engine import session_scope
 from db.models import DetectionRunLog, LogRaw
 
@@ -38,6 +40,8 @@ class DetectionRunResult:
     logs_scanned: int
     marked_processed: int
     detections: list[Detection] = field(default_factory=list)
+    alerts_created: int = 0
+    incidents_created: int = 0
     status: str = "success"
     dry_run: bool = True
     duration_ms: int = 0
@@ -48,39 +52,48 @@ class DetectionRunResult:
 
 def run_detection(*, commit: bool = False, limit: int | None = None) -> DetectionRunResult:
     started = time.monotonic()
+    alerts_created = incidents_created = marked = 0
+    run_id = None
+
     with session_scope("rw") as s:
         rules = load_active_rules(s)
         logs = load_unprocessed_logs(s, limit=limit)
         detections = run_rules(rules, logs)
 
-        marked = 0
-        run_id = None
-        if commit and logs:
-            marked = s.execute(
-                update(LogRaw)
-                .where(LogRaw.log_id.in_([l.log_id for l in logs]))
-                .values(processed=True)
-            ).rowcount
-
-        duration_ms = int((time.monotonic() - started) * 1000)
         if commit:
+            alert_result = create_alerts(s, detections)
+            alerts_created = alert_result.created
+            incidents_created = len(escalate_high_severity(s))
+
+            if logs:
+                marked = s.execute(
+                    update(LogRaw)
+                    .where(LogRaw.log_id.in_([l.log_id for l in logs]))
+                    .values(processed=True)
+                ).rowcount
+
+            duration_ms = int((time.monotonic() - started) * 1000)
             run_id = s.execute(
                 insert(DetectionRunLog)
                 .values(
                     stage="detect",
                     logs_processed=len(logs),
-                    alerts_generated=0,  # populated in Phase 4
+                    alerts_generated=alerts_created,
                     status="success",
                     duration_ms=duration_ms,
                 )
                 .returning(DetectionRunLog.run_id)
             ).scalar_one()
+        else:
+            duration_ms = int((time.monotonic() - started) * 1000)
 
     return DetectionRunResult(
         run_id=run_id,
         logs_scanned=len(logs),
         marked_processed=marked,
         detections=detections,
+        alerts_created=alerts_created,
+        incidents_created=incidents_created,
         dry_run=not commit,
         duration_ms=duration_ms,
     )
@@ -90,6 +103,9 @@ def _print(result: DetectionRunResult) -> None:
     mode = "DRY RUN" if result.dry_run else f"committed (run_id={result.run_id})"
     print(f"detection {mode}: scanned {result.logs_scanned} unprocessed logs, "
           f"{len(result.detections)} detection(s), {result.duration_ms} ms")
+    if not result.dry_run:
+        print(f"  alerts created: {result.alerts_created}   "
+              f"incidents escalated: {result.incidents_created}")
     for rule_type, n in sorted(result.by_rule_type().items()):
         print(f"  {rule_type:<22} {n}")
     for d in result.detections:
