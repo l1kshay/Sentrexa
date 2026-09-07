@@ -1,13 +1,58 @@
-# Sentrexa core pipeline: simulate -> ingest -> detect
-# Full implementation lands in Phase 6. Placeholder keeps the workflow path in
-# git history and is manual-trigger only so it does not run on every push.
+# Sentrexa core pipeline: simulate -> ingest -> detect -> alert
+# Runs on a schedule and on demand. Every stage logs a row to detection_run_log.
 name: pipeline
 
 on:
+  schedule:
+    - cron: "17 */6 * * *"      # every 6 hours
   workflow_dispatch:
 
+concurrency:
+  group: sentrexa-pipeline       # never run two cycles against the shared DB at once
+  cancel-in-progress: false
+
 jobs:
-  placeholder:
+  cycle:
     runs-on: ubuntu-latest
+    env:
+      SENTREXA_ENV: ci
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DATABASE_URL_RW: ${{ secrets.DATABASE_URL_RW }}
+      DATABASE_URL_RO: ${{ secrets.DATABASE_URL_RO }}
     steps:
-      - run: echo "pipeline workflow is implemented in Phase 6"
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Unit tests (no database)
+        run: pytest -m "not db" -q
+
+      - name: Ensure schema + detection rules
+        run: |
+          python -m sql.bootstrap --schema-only
+          python -m detection.seed
+
+      - name: Simulate -> ingest -> detect
+        run: |
+          python -m simulation.dataset --quiet
+          python -m ingestion.load
+          python -m detection.runner --commit
+
+      - name: Show recent pipeline runs
+        run: |
+          python - <<'PY'
+          from sqlalchemy import text
+          from db.engine import get_engine
+          with get_engine("ro").connect() as c:
+              for r in c.execute(text(
+                  "SELECT run_id, run_timestamp, stage, logs_processed, "
+                  "alerts_generated, status FROM detection_run_log "
+                  "ORDER BY run_timestamp DESC LIMIT 8")):
+                  print(dict(r._mapping))
+          PY
