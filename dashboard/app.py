@@ -10,12 +10,23 @@ Run:
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, time, timezone
 
 import plotly.express as px
 import streamlit as st
 
-from dashboard import data
+# On Streamlit Community Cloud, secrets arrive via st.secrets - mirror them into
+# the environment so config.settings (env-driven) picks them up unchanged.
+try:  # pragma: no cover - only on Streamlit Cloud
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str):
+            os.environ.setdefault(_k, _v)
+except Exception:
+    pass
+
+from dashboard import data  # noqa: E402
+from dashboard.auth import require_login  # noqa: E402
 
 st.set_page_config(page_title="Sentrexa SOC", page_icon="🛡️", layout="wide")
 
@@ -86,9 +97,11 @@ def view_incident_board() -> None:
             continue
         st.subheader(f"{status} ({len(sub)})")
         for _, row in sub.iterrows():
+            ip = row.source_ip if isinstance(row.source_ip, str) else None
+            user = row.username if isinstance(row.username, str) else None
             title = (
                 f"#{row.incident_id} · {row.severity.upper()} · {row.rule_name} · "
-                f"{row.source_ip or row.username or '-'} · age {row.age_hours:.1f}h"
+                f"{ip or user or '-'} · age {row.age_hours:.1f}h"
             )
             with st.expander(title):
                 st.write(
@@ -195,6 +208,8 @@ VIEWS = {
 
 def main() -> None:
     st.sidebar.title("🛡️ Sentrexa SOC")
+    name = require_login()
+    st.sidebar.caption(f"Signed in as {name}")
     choice = st.sidebar.radio("View", list(VIEWS))
     st.sidebar.divider()
     VIEWS[choice]()

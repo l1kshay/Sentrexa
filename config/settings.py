@@ -116,6 +116,25 @@ class DashboardAuthSettings:
     cookie_key: str
     cookie_name: str
     cookie_expiry_days: int
+    username: str
+    display_name: str
+    password_hash: str
+
+    def credentials(self) -> dict:
+        """The dict shape streamlit-authenticator expects."""
+        return {
+            "usernames": {
+                self.username: {
+                    "name": self.display_name,
+                    "password": self.password_hash,
+                    "email": f"{self.username}@sentrexa.local",
+                }
+            }
+        }
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.password_hash and self.password_hash != "CHANGE_ME")
 
 
 @dataclass(frozen=True)
@@ -194,6 +213,9 @@ def get_settings() -> Settings:
             cookie_key=_get("DASHBOARD_AUTH_COOKIE_KEY", "dev_only_change_me"),
             cookie_name=_get("DASHBOARD_AUTH_COOKIE_NAME", "sentrexa_auth"),
             cookie_expiry_days=_get_int("DASHBOARD_AUTH_COOKIE_EXPIRY_DAYS", 7),
+            username=_get("DASHBOARD_AUTH_USERNAME", "analyst"),
+            display_name=_get("DASHBOARD_AUTH_NAME", "SOC Analyst"),
+            password_hash=_get("DASHBOARD_AUTH_PASSWORD_HASH", "CHANGE_ME"),
         ),
         bigquery=BigQuerySettings(
             project_id=_get("GCP_PROJECT_ID"),
