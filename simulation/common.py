@@ -67,6 +67,38 @@ def random_time(rng: random.Random, start: datetime, end: datetime) -> datetime:
     return start + timedelta(seconds=rng.uniform(0, span))
 
 
+def random_business_time(
+    rng: random.Random,
+    start: datetime,
+    end: datetime,
+    *,
+    off_hours_fraction: float = 0.05,
+    business_start: int = 8,
+    business_end: int = 19,
+) -> datetime:
+    """A timestamp in [start, end) biased toward working hours.
+
+    ~``1 - off_hours_fraction`` of results land in [business_start, business_end)
+    UTC; the rest are spread across the remaining hours. Used for benign human
+    activity so that the "off-hours login" rule has a genuinely anomalous
+    minority to catch instead of ~40% of all logins.
+    """
+    total_days = max(int((end - start).total_seconds() // 86400), 1)
+    day = start + timedelta(days=rng.randrange(total_days))
+    day = day.replace(minute=0, second=0, microsecond=0)
+
+    business = list(range(business_start, business_end))
+    after = [h for h in range(24) if h not in business]
+    hour = rng.choice(business) if rng.random() > off_hours_fraction else rng.choice(after)
+
+    candidate = day.replace(hour=hour) + timedelta(seconds=rng.uniform(0, 3600))
+    if candidate < start:
+        candidate += timedelta(days=1)
+    if candidate >= end:
+        candidate -= timedelta(days=1)
+    return candidate.replace(microsecond=0)
+
+
 def random_time_at_hour(
     rng: random.Random, start: datetime, end: datetime, target_hour: int
 ) -> datetime:

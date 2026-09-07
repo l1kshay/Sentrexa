@@ -15,7 +15,7 @@ from __future__ import annotations
 import random
 from datetime import datetime, timedelta
 
-from ..common import internal_ip, iso_z, random_time
+from ..common import internal_ip, iso_z, random_business_time
 from ..schema import (
     EVENT_LOGIN,
     EVENT_LOGOUT,
@@ -130,7 +130,7 @@ def generate_auth_events(
     sudo_capable = list(dict.fromkeys(users[:4] + admin_users))
 
     while len(events) < count:
-        dt = random_time(rng, start, end)
+        dt = random_business_time(rng, start, end)
         user = rng.choice(users)
         ip = internal_ip(rng)
         roll = rng.random()
