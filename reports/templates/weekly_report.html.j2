@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sentrexa weekly report — {{ period_end[:10] }}</title>
+  <style>
+    body { font: 14px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+           color: #1f2937; margin: 0; padding: 2rem; background: #f9fafb; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    h2 { font-size: 1.05rem; margin: 2rem 0 .5rem; border-bottom: 2px solid #e5e7eb;
+         padding-bottom: .25rem; }
+    .muted { color: #6b7280; }
+    .kpis { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1rem; }
+    .kpi { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+           padding: .6rem .9rem; min-width: 8rem; }
+    .kpi .n { font-size: 1.5rem; font-weight: 700; }
+    .kpi .l { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em;
+              color: #6b7280; }
+    table { border-collapse: collapse; width: 100%; background: #fff; margin-top: .5rem; }
+    th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #eef2f7;
+             font-size: .85rem; }
+    th { background: #f3f4f6; }
+    .sev-critical { color: #7f1d1d; font-weight: 700; }
+    .sev-high { color: #dc2626; font-weight: 700; }
+    .sev-medium { color: #b45309; }
+    .sev-low { color: #2563eb; }
+    .empty { color: #9ca3af; font-style: italic; }
+    footer { margin-top: 3rem; color: #9ca3af; font-size: .8rem; }
+  </style>
+</head>
+<body>
+  <h1>Sentrexa — Weekly SOC Summary</h1>
+  <div class="muted">
+    Period {{ period_start[:16] }} → {{ period_end[:16] }} UTC ·
+    generated {{ generated_at[:16] }} UTC
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="n">{{ summary.alerts_total }}</div><div class="l">Alerts</div></div>
+    <div class="kpi"><div class="n">{{ summary.alerts_new }}</div><div class="l">New</div></div>
+    <div class="kpi"><div class="n">{{ summary.alerts_high }}</div><div class="l">High / critical</div></div>
+    <div class="kpi"><div class="n">{{ summary.incidents_opened }}</div><div class="l">Incidents opened</div></div>
+    <div class="kpi"><div class="n">{{ summary.incidents_open_now }}</div><div class="l">Still open</div></div>
+    <div class="kpi"><div class="n">{{ summary.logs_ingested }}</div><div class="l">Logs ingested</div></div>
+    <div class="kpi"><div class="n">{{ summary.logs_rejected }}</div><div class="l">Quarantined</div></div>
+  </div>
+
+  <h2>Alerts by severity</h2>
+  {% if by_severity %}
+  <table>
+    <tr><th>Severity</th><th>Count</th></tr>
+    {% for r in by_severity %}
+    <tr><td class="sev-{{ r.severity }}">{{ r.severity }}</td><td>{{ r.n }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="empty">No alerts in this period.</p>{% endif %}
+
+  <h2>Alerts by MITRE technique</h2>
+  {% if by_technique %}
+  <table>
+    <tr><th>Tactic</th><th>Technique</th><th>ID</th><th>Count</th></tr>
+    {% for r in by_technique %}
+    <tr><td>{{ r.tactic }}</td><td>{{ r.technique_name }}</td>
+        <td>{{ r.mitre_technique_id }}</td><td>{{ r.n }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="empty">None.</p>{% endif %}
+
+  <h2>Top alerts</h2>
+  {% if top_alerts %}
+  <table>
+    <tr><th>Triggered (UTC)</th><th>Severity</th><th>Rule</th><th>Technique</th>
+        <th>Source IP</th><th>User</th><th>Status</th></tr>
+    {% for a in top_alerts %}
+    <tr>
+      <td>{{ a.triggered_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td class="sev-{{ a.severity }}">{{ a.severity }}</td>
+      <td>{{ a.rule_name }}</td>
+      <td>{{ a.technique_name }}</td>
+      <td>{{ a.source_ip or '—' }}</td>
+      <td>{{ a.username or '—' }}</td>
+      <td>{{ a.alert_status }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="empty">No alerts in this period.</p>{% endif %}
+
+  <h2>Open incidents</h2>
+  {% if open_incidents %}
+  <table>
+    <tr><th>#</th><th>Severity</th><th>Rule</th><th>Opened (UTC)</th>
+        <th>Age (h)</th><th>Assignee</th></tr>
+    {% for i in open_incidents %}
+    <tr>
+      <td>{{ i.incident_id }}</td>
+      <td class="sev-{{ i.severity }}">{{ i.severity }}</td>
+      <td>{{ i.rule_name }}</td>
+      <td>{{ i.opened_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>{{ '%.1f'|format(i.age_hours) }}</td>
+      <td>{{ i.assigned_to or '(unassigned)' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="empty">No open incidents. 🎉</p>{% endif %}
+
+  <h2>Top offending source IPs</h2>
+  {% if top_ips %}
+  <table>
+    <tr><th>Source IP</th><th>Alerts</th></tr>
+    {% for r in top_ips %}<tr><td>{{ r.source_ip }}</td><td>{{ r.alerts }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<p class="empty">None.</p>{% endif %}
+
+  <h2>Top alerted usernames</h2>
+  {% if top_users %}
+  <table>
+    <tr><th>Username</th><th>Alerts</th></tr>
+    {% for r in top_users %}<tr><td>{{ r.username }}</td><td>{{ r.alerts }}</td></tr>{% endfor %}
+  </table>
+  {% else %}<p class="empty">None.</p>{% endif %}
+
+  <h2>Detection pipeline health</h2>
+  {% if runs %}
+  <table>
+    <tr><th>Run</th><th>When (UTC)</th><th>Stage</th><th>Logs</th><th>Alerts</th>
+        <th>Status</th><th>ms</th></tr>
+    {% for r in runs %}
+    <tr>
+      <td>{{ r.run_id }}</td>
+      <td>{{ r.run_timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>{{ r.stage }}</td>
+      <td>{{ r.logs_processed }}</td>
+      <td>{{ r.alerts_generated }}</td>
+      <td>{{ r.status }}</td>
+      <td>{{ r.duration_ms or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="empty">No pipeline runs recorded in this period.</p>{% endif %}
+
+  <footer>
+    Sentrexa · rule-based SOC monitoring · this report is generated from the
+    read-only analytics role.
+  </footer>
+</body>
+</html>

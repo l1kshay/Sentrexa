@@ -238,3 +238,6 @@ credentials.json
 
 # Local BI exports / working files
 bi_export/*.local.*
+
+# Generated weekly reports
+reports/out/
