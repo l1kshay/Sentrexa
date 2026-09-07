@@ -1,0 +1,13 @@
+# Sentrexa core pipeline: simulate -> ingest -> detect
+# Full implementation lands in Phase 6. Placeholder keeps the workflow path in
+# git history and is manual-trigger only so it does not run on every push.
+name: pipeline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "pipeline workflow is implemented in Phase 6"

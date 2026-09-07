@@ -1,0 +1,13 @@
+# Sentrexa BigQuery sync (Phase 7 only)
+# Runs bi_export/sync_to_bigquery.py on a schedule after the main pipeline.
+# Placeholder until Phase 7; manual-trigger only.
+name: bigquery_sync
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "bigquery_sync workflow is implemented in Phase 7"
