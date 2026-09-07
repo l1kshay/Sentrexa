@@ -33,14 +33,18 @@ from .schema import LogEvent
 # how the benign budget is split across sources
 _SOURCE_MIX = {"auth": 0.45, "web": 0.35, "firewall": 0.20}
 
-# malformed line templates for Phase 2 quarantine testing
+# Malformed line templates for Phase 2 quarantine testing. All are structurally
+# invalid at the feed level (not JSON, or missing/empty required keys, or an
+# unknown source hint) so ingestion must quarantine them at load time. Phase 2
+# adds its own tests for lines that are structurally fine but whose raw_message
+# matches no known log grammar.
 _MALFORMED_TEMPLATES = [
     'this is not json at all -- {n}',
     '{{"source_system": "auth"}}',                     # missing raw_message
     '{{"source_system": "web", "raw_message": ""}}',   # empty raw_message
     '{{"source_system": "weather", "raw_message": "temp=22C humidity=60"}}',  # unknown source
     '{{"raw_message": "Sep  7 orphan line with no source hint"}}',            # missing source
-    '{{"source_system": "auth", "raw_message": "\\u0000\\u0000 garbled ### %%%"}}',  # unparseable
+    '{{"source_system": "auth", "raw_message": "Sep  7 truncated line no close',  # invalid JSON
 ]
 
 
