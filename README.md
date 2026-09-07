@@ -16,9 +16,9 @@ dashboards (Looker Studio, Power BI, Tableau).
 
 | Phase | Scope | State |
 |------:|-------|-------|
-| 1 | Log simulation foundation | in progress |
-| 2 | Ingestion & storage (PostgreSQL) | not started |
-| 3 | Detection engine | not started |
+| 1 | Log simulation foundation | ✅ done |
+| 2 | Ingestion & storage (PostgreSQL) | ✅ done |
+| 3 | Detection engine | in progress |
 | 4 | Alerting, ticketing & MITRE mapping | not started |
 | 5 | Dashboard & reporting | not started |
 | 6 | Automation, security & deployment | not started |
@@ -51,16 +51,31 @@ tests/             pytest suite, focused on the detection rule engine
 
 1. **Python 3.14** and a PostgreSQL database (local or hosted, e.g. Neon).
 2. `python -m pip install -r requirements.txt`
-3. `cp .env.example .env` and fill in real values. `.env` is gitignored; never
-   commit real credentials.
-4. Phase 1 (simulation) needs no database:
+3. `cp .env.example .env` and fill in real values (at minimum `DATABASE_URL`,
+   the database owner). `.env` is gitignored; never commit real credentials.
+4. **Bootstrap the database** (idempotent — applies DDL, creates the
+   least-privilege `sentrexa_ro` / `sentrexa_rw` roles, writes their generated
+   credentials into `.env`):
 
    ```
-   python -m simulation.dataset            # writes data/raw/<timestamp>.ndjson + .scenarios.json
-   pytest tests/test_simulation.py -q
+   python -m sql.bootstrap
    ```
 
-Later phases add database bootstrap, the detection cycle, and the dashboard;
+5. **Simulate → ingest** (Phase 1 needs no database; Phase 2 needs step 4):
+
+   ```
+   python -m simulation.dataset                 # data/raw/<end>.ndjson + .scenarios.json + _latest.json
+   python -m simulation.dataset --inject-malformed 6   # add corrupt lines to exercise quarantine
+   python -m ingestion.load                     # load newest feed into logs_raw; bad lines -> rejected_records
+   ```
+
+6. **Tests** (DB integration tests auto-skip if no database is reachable):
+
+   ```
+   pytest -q
+   ```
+
+Later phases add the detection cycle, the dashboard, and the BigQuery sync;
 their commands will be documented here as they land.
 
 ## Security notes
