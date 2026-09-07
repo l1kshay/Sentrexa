@@ -266,13 +266,10 @@ class TestEngine:
 @pytest.mark.db
 class TestIdempotency:
     def test_detection_does_not_reprocess_a_committed_batch(
-        self, admin_engine, cleanup_batch
+        self, clean_slate, admin_engine, cleanup_batch
     ) -> None:
         from detection.runner import run_detection
         from ingestion.load import ingest_feed
-
-        # Drain any pre-existing unprocessed logs so this test is isolated.
-        run_detection(commit=True)
 
         batch = cleanup_batch(f"test-{uuid.uuid4()}")
         # 12 failed logins from one IP within 2 minutes = a brute-force burst

@@ -54,7 +54,8 @@ def admin_engine(_admin_url):
 
 @pytest.fixture
 def cleanup_batch(admin_engine):
-    """Yields a callable to register batch names; deletes their rows on teardown."""
+    """Yields a callable to register batch names; deletes their rows (and any
+    alerts / incidents / links derived from those logs) on teardown."""
     batches: list[str] = []
 
     def _register(name: str) -> str:
@@ -65,18 +66,43 @@ def cleanup_batch(admin_engine):
 
     with admin_engine.begin() as conn:
         for name in batches:
-            conn.execute(
-                text("DELETE FROM logs_raw WHERE ingest_batch = :b"), {"b": name}
-            )
-            conn.execute(
-                text("DELETE FROM rejected_records WHERE source_file = :b"), {"b": name}
-            )
-        conn.execute(
-            text(
-                "DELETE FROM detection_run_log "
-                "WHERE stage = 'ingest' AND run_timestamp > now() - interval '1 hour'"
-            )
-        )
+            alert_ids = conn.execute(
+                text(
+                    "SELECT DISTINCT l.alert_id FROM alert_log_links l "
+                    "JOIN logs_raw g ON g.log_id = l.log_id "
+                    "WHERE g.ingest_batch = :b"
+                ),
+                {"b": name},
+            ).scalars().all()
+            if alert_ids:
+                conn.execute(text("DELETE FROM incidents WHERE alert_id = ANY(:ids)"),
+                             {"ids": list(alert_ids)})
+                conn.execute(text("DELETE FROM alert_log_links WHERE alert_id = ANY(:ids)"),
+                             {"ids": list(alert_ids)})
+                conn.execute(text("DELETE FROM alerts WHERE alert_id = ANY(:ids)"),
+                             {"ids": list(alert_ids)})
+            conn.execute(text("DELETE FROM logs_raw WHERE ingest_batch = :b"), {"b": name})
+            conn.execute(text("DELETE FROM rejected_records WHERE source_file = :b"),
+                         {"b": name})
+
+
+@pytest.fixture
+def clean_slate(admin_engine):
+    """Empty the operational tables and reseed detection rules, so a test that
+    exercises the full pipeline is fully isolated. Leaves the DB empty afterwards
+    (re-run simulate -> ingest -> detect to repopulate for the dashboard)."""
+    from detection.seed import seed
+
+    def _reset() -> None:
+        with admin_engine.begin() as conn:
+            conn.execute(text(
+                "TRUNCATE alert_log_links, incidents, alerts, logs_raw, "
+                "rejected_records, detection_run_log RESTART IDENTITY"
+            ))
+        seed()
+
+    _reset()
+    yield _reset
 
 
 @pytest.fixture(scope="session")
