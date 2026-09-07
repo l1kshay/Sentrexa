@@ -1,0 +1,12 @@
+# Committed Streamlit config (no secrets). Secrets go in .streamlit/secrets.toml
+# (gitignored) locally, or the Streamlit Community Cloud "Secrets" UI in deploy.
+[server]
+headless = true
+enableCORS = false
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#dc2626"

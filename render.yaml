@@ -1,0 +1,25 @@
+# Render.com blueprint - alternative to Streamlit Community Cloud.
+# Set DATABASE_URL_RO and the DASHBOARD_AUTH_* vars as environment variables in
+# the Render dashboard (mark them secret). Do not commit real values.
+services:
+  - type: web
+    name: sentrexa-dashboard
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run dashboard/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.14"
+      - key: SENTREXA_ENV
+        value: prod
+      - key: DATABASE_URL_RO
+        sync: false
+      - key: DASHBOARD_AUTH_COOKIE_KEY
+        sync: false
+      - key: DASHBOARD_AUTH_USERNAME
+        sync: false
+      - key: DASHBOARD_AUTH_NAME
+        sync: false
+      - key: DASHBOARD_AUTH_PASSWORD_HASH
+        sync: false
