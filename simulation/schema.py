@@ -69,7 +69,7 @@ class LogEventError(ValueError):
 class LogEvent:
     timestamp: datetime          # tz-aware UTC, the event time
     source_system: str           # one of SOURCE_SYSTEMS
-    source_ip: str               # IPv4 string
+    source_ip: str | None        # IPv4 string; None for IP-less auth lines (sudo, session close)
     username: str | None         # None for events with no principal (most firewall)
     event_type: str              # one of EVENT_TYPES
     status: str                  # one of STATUSES (constrained by source_system)
@@ -77,6 +77,13 @@ class LogEvent:
 
     # -- construction helpers ------------------------------------------------ #
     def __post_init__(self) -> None:
+        # Our raw log formats carry whole-second timestamps, so the canonical
+        # event time is second-precision too - this keeps a generated event and
+        # the event re-parsed from its raw line identical.
+        if self.timestamp.microsecond:
+            object.__setattr__(
+                self, "timestamp", self.timestamp.replace(microsecond=0)
+            )
         self.validate()
 
     def validate(self) -> None:
@@ -96,10 +103,11 @@ class LogEvent:
             raise LogEventError("timestamp must be timezone-aware")
         if self.timestamp.utcoffset() != timezone.utc.utcoffset(None):
             raise LogEventError("timestamp must be UTC")
-        try:
-            ipaddress.ip_address(self.source_ip)
-        except ValueError as exc:
-            raise LogEventError(f"invalid source_ip: {self.source_ip!r}") from exc
+        if self.source_ip is not None:
+            try:
+                ipaddress.ip_address(self.source_ip)
+            except ValueError as exc:
+                raise LogEventError(f"invalid source_ip: {self.source_ip!r}") from exc
         if not self.raw_message or "\n" in self.raw_message:
             raise LogEventError("raw_message must be a non-empty single line")
         if self.username is not None and not self.username.strip():

@@ -78,7 +78,7 @@ class LogRaw(Base):
     log_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     timestamp: Mapped[datetime] = mapped_column("timestamp", _TS, nullable=False)
     source_system: Mapped[str] = mapped_column(Text, nullable=False)
-    source_ip: Mapped[str] = mapped_column(INET, nullable=False)
+    source_ip: Mapped[str | None] = mapped_column(INET)
     username: Mapped[str | None] = mapped_column(Text)
     event_type: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)

@@ -88,11 +88,12 @@ def login_event(
     )
 
 
-def logout_event(dt: datetime, *, user: str, ip: str, rng: random.Random) -> LogEvent:
+def logout_event(dt: datetime, *, user: str, rng: random.Random) -> LogEvent:
+    # sshd session-close lines carry no remote address.
     return LogEvent(
         timestamp=dt,
         source_system=SOURCE_AUTH,
-        source_ip=ip,
+        source_ip=None,
         username=user,
         event_type=EVENT_LOGOUT,
         status=STATUS_SUCCESS,
@@ -101,12 +102,13 @@ def logout_event(dt: datetime, *, user: str, ip: str, rng: random.Random) -> Log
 
 
 def sudo_event(
-    dt: datetime, *, user: str, command: str, ip: str, rng: random.Random, ok: bool = True,
+    dt: datetime, *, user: str, command: str, rng: random.Random, ok: bool = True,
 ) -> LogEvent:
+    # sudo syslog lines carry no remote address.
     return LogEvent(
         timestamp=dt,
         source_system=SOURCE_AUTH,
-        source_ip=ip,
+        source_ip=None,
         username=user,
         event_type=EVENT_SUDO,
         status=STATUS_SUCCESS if ok else STATUS_FAILURE,
@@ -145,14 +147,13 @@ def generate_auth_events(
                 )
             )
         elif roll < 0.90:
-            events.append(logout_event(dt, user=user, ip=ip, rng=rng))
+            events.append(logout_event(dt, user=user, rng=rng))
         else:
             events.append(
                 sudo_event(
                     dt,
                     user=rng.choice(sudo_capable),
                     command=rng.choice(_BENIGN_SUDO_COMMANDS),
-                    ip=ip,
                     rng=rng,
                 )
             )

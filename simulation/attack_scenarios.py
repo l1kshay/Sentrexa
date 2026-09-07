@@ -153,7 +153,6 @@ def privilege_escalation(
                 user=user,
                 command=keyword if keyword.startswith(("sudo", "usermod", "net ", "GRANT"))
                 else f"/bin/bash -c '{keyword}'",
-                ip=ip,
                 rng=rng,
             )
         )

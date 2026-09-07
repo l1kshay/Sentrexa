@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS logs_raw (
     "timestamp"   timestamptz NOT NULL,             -- event time, parsed from the raw line
     source_system text NOT NULL
         CHECK (source_system IN ('auth', 'web', 'firewall')),
-    source_ip     inet NOT NULL,
+    source_ip     inet,                              -- NULL for IP-less lines (sudo, session close)
     username      text,                              -- NULL for principal-less events (firewall)
     event_type    text NOT NULL,
     status        text NOT NULL,
@@ -48,6 +48,9 @@ CREATE TABLE IF NOT EXISTS logs_raw (
     ingest_batch  text NOT NULL DEFAULT '',          -- feed filename this row came from
     dedup_hash    text NOT NULL                      -- sha256(batch|line_no|raw_message)
 );
+
+-- Defensive: keep source_ip nullable even if an older deploy created it NOT NULL.
+ALTER TABLE logs_raw ALTER COLUMN source_ip DROP NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_logs_raw_dedup_hash ON logs_raw (dedup_hash);
 CREATE INDEX IF NOT EXISTS ix_logs_raw_ts_ip     ON logs_raw ("timestamp", source_ip);
