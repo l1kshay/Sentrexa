@@ -2,3 +2,6 @@
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "db: integration test that needs a reachable PostgreSQL (auto-skips without one)",
+]
