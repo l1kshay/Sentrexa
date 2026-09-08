@@ -1,5 +1,7 @@
 # Sentrexa
 
+🔗 **Live Demo:** https://sentrexa-fzxkw3qwjddmiyjldppw72.streamlit.app/ &nbsp;·&nbsp; login `analyst` / `sentrexa-dev`
+
 **SOC-style log monitoring & alerting dashboard, with a BI & cloud-analytics layer.**
 
 Sentrexa is a simulated Security Operations Center (SOC) monitoring system. It
@@ -43,6 +45,21 @@ rejected_records  <- malformed log lines, quarantined (never dropped)
 Modules are isolated by concern: `simulation/`, `ingestion/`, `detection/`,
 `alerting/`, `dashboard/`, `reports/`, `bi_export/` (Phase 7), with the shared
 data layer in `db/` and all tunables in `config/settings.py`.
+
+## Interface
+
+The dashboard uses a **"declassified terminal"** visual language — near-black
+ground, IBM Plex Mono throughout, hard 1px rules, square corners, and a
+restrained utilitarian palette (oxidised stamp-red for CRITICAL / classification,
+field amber for HIGH / in-review, drab olive for resolved). Severity reads by
+descending emphasis and padded `[CRIT]` / `[HIGH]` / `[MED ]` / `[LOW ]`
+brackets, not a rainbow. It is built entirely through a `.streamlit/config.toml`
+theme + one consolidated CSS block + `st.markdown` HTML fragments
+(`dashboard/ui.py`); no data logic changed.
+
+| Live Alerts | Analytics | Incidents |
+|---|---|---|
+| ![alert feed](docs/img/alerts.jpg) | ![analytics](docs/img/analytics.jpg) | ![incidents](docs/img/incidents.jpg) |
 
 ## Detection rules
 
