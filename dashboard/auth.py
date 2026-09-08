@@ -26,8 +26,14 @@ def _authenticator() -> stauth.Authenticate:
     )
 
 
-def require_login() -> str:
-    """Block until logged in. Returns the display name. Calls st.stop() otherwise."""
+def require_login() -> tuple[str, "stauth.Authenticate"]:
+    """Block until logged in.
+
+    Returns ``(display_name, authenticator)`` on success. Calls ``st.stop()``
+    otherwise. **Nothing is rendered into ``st.sidebar`` here** - pre-login the
+    only thing on screen is the compact login card; the caller renders every
+    sidebar element only after this returns.
+    """
     if not _auth_cfg.configured:
         st.error(
             "Dashboard auth is not configured. Set DASHBOARD_AUTH_PASSWORD_HASH "
@@ -37,25 +43,28 @@ def require_login() -> str:
 
     authenticator = _authenticator()
 
-    frame = st.container()          # reserve the slot above the login form
+    frame = st.container()          # reserved slot ABOVE the login form
     authenticator.login(location="main")
     status = st.session_state.get("authentication_status")
 
     if status is True:
-        # default key ("Logout"); a custom key of "logout" collides with the
-        # session_state flag streamlit-authenticator sets internally.
-        authenticator.logout(button_name="Sign out", location="sidebar")
-        return st.session_state.get("name", "analyst")
+        return st.session_state.get("name", "analyst"), authenticator
 
+    error_html = (
+        '<div class="sx-login-error">Credential rejected — '
+        "incorrect username or password.</div>"
+        if status is False
+        else ""
+    )
     with frame:                     # only drawn while unauthenticated
         st.markdown(
+            '<div class="sx-login">'
             '<div class="sx-banner">Sentrexa &nbsp;//&nbsp; Security Operations Center '
             '&nbsp;//&nbsp; <b>RESTRICTED — ANALYST ACCESS</b></div>'
             '<div class="sx-ident"><span class="tick">&#9646;</span>'
-            '<h1>Sentrexa SOC</h1></div>'
-            '<div class="sx-subline">authenticate to open the operations terminal</div>',
+            "<h1>Sentrexa SOC</h1></div>"
+            '<div class="sx-subline">authenticate to open the operations terminal</div>'
+            f"{error_html}</div>",
             unsafe_allow_html=True,
         )
-        if status is False:
-            st.error("Credential rejected — incorrect username or password.")
     st.stop()

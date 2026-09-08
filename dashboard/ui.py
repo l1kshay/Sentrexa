@@ -325,6 +325,40 @@ table.sx-table tr[data-sev="high"]     td:first-child {{ box-shadow: inset 3px 0
 .sx-empty .head {{ font-size: .8rem; letter-spacing: .18em; text-transform: uppercase; color: var(--fg-dim); }}
 .sx-empty .sub {{ font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-faint); margin-top: .4rem; }}
 .sx-empty .head::before {{ content: "// "; color: var(--stamp); }}
+
+/* ---- login screen : compact centred prompt, no sidebar --------------- */
+.sx-login {{ max-width: 400px; margin: 3.25rem auto .9rem; }}
+.sx-login .sx-banner {{
+    margin: 0 0 .9rem; padding: .35rem .55rem; font-size: .56rem; letter-spacing: .16em;
+    text-align: left; border-top-width: 2px;
+}}
+.sx-login .sx-ident {{ gap: .55rem; margin-bottom: .1rem; }}
+.sx-login .sx-ident h1 {{ font-size: 1.05rem; letter-spacing: .16em; }}
+.sx-login .sx-ident .tick {{ font-size: 1.05rem; }}
+.sx-login .sx-subline {{ margin-bottom: 0; font-size: .6rem; }}
+.sx-login .sx-login-error {{
+    margin-top: .7rem; padding: .4rem .6rem; font-size: .62rem; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--stamp);
+    border: 1px solid var(--stamp); border-left-width: 3px; background: var(--bg-inset);
+}}
+
+/* streamlit-authenticator renders the only st.form in the app */
+[data-testid="stForm"] {{
+    max-width: 400px; margin: 0 auto !important;
+    padding: 1.1rem 1.15rem 1.2rem !important;
+    border: 1px solid var(--rule-strong) !important; background: var(--bg-raised);
+}}
+[data-testid="stForm"] h1, [data-testid="stForm"] h2, [data-testid="stForm"] h3 {{
+    font-size: .68rem !important; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--fg-dim); font-weight: 600; margin: 0 0 .6rem;
+}}
+[data-testid="stForm"] [data-testid="stTextInput"] {{ margin-bottom: .55rem; }}
+[data-testid="stForm"] [data-testid="stWidgetLabel"] p {{
+    font-size: .58rem !important; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--fg-dim);
+}}
+[data-testid="stForm"] [data-testid="stFormSubmitButton"] {{ margin-top: .3rem; }}
+[data-testid="stForm"] [data-testid="stFormSubmitButton"] button {{ width: 100%; }}
 """
 
 

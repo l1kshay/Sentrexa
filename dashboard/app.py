@@ -343,15 +343,17 @@ VIEWS = {
 # entrypoint
 # --------------------------------------------------------------------------- #
 def main() -> None:
+    # require_login() renders ONLY the centred login card and st.stop()s until
+    # authenticated - it never touches st.sidebar, so pre-login no sidebar
+    # markup exists at all.
+    name, authenticator = require_login()
+
     with st.sidebar:
         st.markdown(
             '<div class="sx-wordmark">SENTREXA<small>SOC // TERMINAL</small></div>',
             unsafe_allow_html=True,
         )
-
-    name = require_login()  # renders login form + st.stop() until authenticated
-
-    with st.sidebar:
+        authenticator.logout(button_name="Sign out", location="sidebar")
         st.markdown(
             f'<div class="sx-operator">operator // <b>{name}</b></div>',
             unsafe_allow_html=True,
