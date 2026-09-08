@@ -1,6 +1,8 @@
 # Sentrexa
 
-🔗 **Live Demo:** https://sentrexa-fzxkw3qwjddmiyjldppw72.streamlit.app/ &nbsp;·&nbsp; login `analyst` / `sentrexa-dev`
+🔗 **Live Demo:** https://sentrexa-fzxkw3qwjddmiyjldppw72.streamlit.app/
+
+🔒 The live dashboard requires authentication. Message me at [YOUR CONTACT HERE] for demo credentials.
 
 **SOC-style log monitoring & alerting dashboard, with a BI & cloud-analytics layer.**
 
