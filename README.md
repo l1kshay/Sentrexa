@@ -22,7 +22,7 @@ independent BI dashboards.
 | 4 | Alerting, ticketing & MITRE mapping | ✅ done |
 | 5 | Dashboard & reporting | ✅ done |
 | 6 | Automation, security & deployment | ✅ done |
-| 7 | BI & cloud analytics (BigQuery + 3 BI tools) | not started (gated on Phase 6 sign-off) |
+| 7 | BI & cloud analytics (BigQuery sync + 3 BI connection guides) | ✅ done |
 
 ## Architecture
 
@@ -108,7 +108,16 @@ no-op.
    streamlit run dashboard/app.py
    ```
 
-8. **Tests** (DB integration tests auto-skip if no database is reachable):
+8. **BigQuery analytics sync (Phase 7)** — keyless auth, no key file anywhere:
+
+   ```
+   gcloud auth application-default login             # once; your own Google account
+   gcloud auth application-default set-quota-project sentrexa
+   python -m bi_export.schema.bigquery_schema        # create dataset + star schema (idempotent)
+   python -m bi_export.sync_to_bigquery              # incremental MERGE  (--full to rebuild)
+   ```
+
+9. **Tests** (DB / BigQuery integration tests auto-skip without a database / ADC):
 
    ```
    pytest -q                 # everything
@@ -117,9 +126,8 @@ no-op.
 
 ## Automation (GitHub Actions)
 
-`.github/workflows/pipeline.yml` runs `pytest -m "not db"` then
-simulate → ingest → detect (`--commit`) every 6 hours (and on demand). It needs
-three repository secrets:
+**`.github/workflows/pipeline.yml`** runs `pytest -m "not db"` then
+simulate → ingest → detect (`--commit`) every 6 hours (and on demand). Secrets:
 
 ```
 gh secret set DATABASE_URL     -R <owner>/<repo> --body 'postgresql+psycopg://OWNER:...'
@@ -127,8 +135,19 @@ gh secret set DATABASE_URL_RW  -R <owner>/<repo> --body 'postgresql+psycopg://se
 gh secret set DATABASE_URL_RO  -R <owner>/<repo> --body 'postgresql+psycopg://sentrexa_ro:...'
 ```
 
-(or *Settings → Secrets and variables → Actions* in the GitHub UI). The values
-are the same connection strings the bootstrap wrote into `.env`.
+**`.github/workflows/bigquery_sync.yml`** runs the BigQuery sync ~30 min after
+the pipeline. Authentication is **Workload Identity Federation** — the job mints
+an OIDC token that impersonates `sentrexa-bq-sync`; there is **no service-account
+key**. Extra secrets (identifiers only, not credentials):
+
+```
+gh secret set GCP_PROJECT_ID   -R <owner>/<repo> --body 'sentrexa'
+gh secret set GCP_SYNC_SA      -R <owner>/<repo> --body 'sentrexa-bq-sync@sentrexa.iam.gserviceaccount.com'
+gh secret set GCP_WIF_PROVIDER -R <owner>/<repo> --body 'projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+```
+
+(or *Settings → Secrets and variables → Actions* in the GitHub UI). The DB
+values are the connection strings `python -m sql.bootstrap` wrote into `.env`.
 
 ## Deployment
 
@@ -145,6 +164,163 @@ picks them up.
 **Render** — `render.yaml` is a ready blueprint; set `DATABASE_URL_RO` and the
 `DASHBOARD_AUTH_*` vars as secret env vars in the Render dashboard.
 
+## BI & Cloud Analytics (Phase 7)
+
+### Sync architecture
+
+```
+PostgreSQL (sentrexa_ro, read-only)                Google BigQuery: analytics
+  alerts / incidents / detection_rules  --.        fact_alerts       (MERGE on alert_id)
+  mitre_techniques / logs_raw            |         fact_logs_daily   (MERGE on date+source+type+status)
+                                         |  bi_export/               dim_mitre_techniques
+                                         '->  sync_to_bigquery.py -> dim_detection_rules
+                                                     ^               _sync_state  (watermark)
+                                          watermark read/written here (in BigQuery)
+                                                     |
+   [pipeline.yml] --(after each cycle)--> [bigquery_sync.yml]  (WIF, no key)
+                                                     |
+                          +--------------------------+--------------------------+
+                          v                          v                          v
+                   Looker Studio               Power BI                     Tableau
+                   (your Google OAuth)   (your Google OAuth)         (your Google OAuth)
+```
+
+* **Read side** — the sync only ever `SELECT`s from PostgreSQL, through the
+  least-privilege `sentrexa_ro` role. It never writes the operational database.
+* **Watermark** — `analytics._sync_state` in BigQuery holds one
+  `last_synced_at` per target. `fact_alerts` re-syncs rows whose
+  `GREATEST(alert.updated_at, incident.updated_at)` beats the watermark (a
+  `BEFORE UPDATE` trigger maintains those columns); `fact_logs_daily` recomputes
+  daily counts only for dates that received logs since the watermark.
+* **Idempotent** — every load stages into `_stage_<table>` (`WRITE_TRUNCATE`)
+  and then `MERGE`s on the table's natural key, so re-running the sync (or a
+  failed-then-retried run) never produces a duplicate row. `tests/test_bi_sync.py`
+  asserts this.
+* **Keyless auth** — local runs use your own ADC
+  (`gcloud auth application-default login`); CI uses Workload Identity
+  Federation (`google-github-actions/auth@v2`) to impersonate
+  `sentrexa-bq-sync`. No service-account JSON key file exists in this project
+  (the GCP project enforces `iam.disableServiceAccountKeyCreation`).
+* **Not synced** — `logs_raw` is never copied to BigQuery; only alert-level and
+  daily-aggregated data leaves PostgreSQL.
+
+### Star schema (`analytics` dataset)
+
+| Table | Grain | Natural key | Notes |
+|-------|-------|-------------|-------|
+| `fact_alerts` | one row per alert | `alert_id` | fully denormalized: rule + MITRE technique/tactic + incident outcome pre-joined. Partitioned on `triggered_at`, clustered on `(severity, mitre_technique_id)`. |
+| `fact_logs_daily` | one row per `day × source_system × event_type × status` | those 4 columns | `event_count` per bucket. Partitioned on `log_date`, clustered on `(source_system, event_type)`. |
+| `dim_mitre_techniques` | one row per technique | `technique_id` | `technique_id, technique_name, tactic, description` |
+| `dim_detection_rules` | one row per rule | `rule_id` | `rule_id, rule_name, rule_type, severity` |
+| `_sync_state` | one row per sync target | `target_name` | internal watermark; BI tools ignore it |
+
+**`fact_alerts` columns:** `alert_id, triggered_at, severity, alert_status,
+rule_id, rule_name, rule_type, mitre_technique_id, technique_name, tactic,
+source_ip, username, incident_id, incident_status, opened_at, closed_at,
+resolution_hours, row_modified_at, synced_at`.
+
+**Relationships for the BI model:**
+`fact_alerts.rule_id → dim_detection_rules.rule_id` (many-to-one),
+`fact_alerts.mitre_technique_id → dim_mitre_techniques.technique_id` (many-to-one).
+`fact_alerts` is already denormalized, so the dims are optional convenience
+lookups. `fact_logs_daily` stands alone (relate on `log_date` to a BI-generated
+date table if desired).
+
+### GCP resources (already provisioned)
+
+| | |
+|---|---|
+| Project ID / number | `sentrexa` / `956140125620` |
+| Dataset | `sentrexa.analytics` (location **US**) |
+| Sync service account | `sentrexa-bq-sync@sentrexa.iam.gserviceaccount.com` — `roles/bigquery.jobUser` + `roles/bigquery.dataEditor` |
+| Workload Identity pool / provider | `github-pool` / `github-provider`, OIDC issuer `token.actions.githubusercontent.com`, condition `assertion.repository == 'l1kshay/Sentrexa'` |
+| BI-tool auth | **your own Google account via OAuth** — no reader service account, no key file |
+
+The exact `gcloud` commands used are in
+[`bi_export/PROVISIONING.md`](bi_export/PROVISIONING.md).
+
+### Connecting the three BI tools
+
+All three connect **read-only** to BigQuery using **"Sign in with Google"
+(OAuth)** with your project-Owner account. Common values:
+
+* **Billing / query project:** `sentrexa`
+* **Dataset:** `analytics`
+* **Tables:** `fact_alerts`, `fact_logs_daily`, `dim_mitre_techniques`, `dim_detection_rules`
+
+#### 1 — Looker Studio (shareable public link)
+
+1. [lookerstudio.google.com](https://lookerstudio.google.com) → **Create → Data source**.
+2. Pick the **BigQuery** connector (by Google) → **Authorize** with your Google account.
+3. **My Projects → `sentrexa` → `analytics` → `fact_alerts` → Connect**. Add
+   `fact_logs_daily` as a second data source the same way.
+4. **Add to report.** Suggested tiles:
+   * Scorecards: `Record Count` (alerts), `incident_id` (COUNT DISTINCT, filter `incident_status = "Open"`), `resolution_hours` (AVG → "mean time to resolve").
+   * Time series: dimension `triggered_at` (by day), metric `Record Count`, breakdown dimension `severity`.
+   * Bar: dimension `tactic` (or `technique_name`), metric `Record Count`.
+   * Table: dimension `source_ip`, metric `Record Count`, sorted desc.
+   * From `fact_logs_daily`: stacked column, dimension `log_date`, metric `event_count`, breakdown `source_system`.
+5. **Share → Manage access → Anyone with the link → Viewer** for the portfolio link.
+
+#### 2 — Power BI Desktop (import mode, ≥1 DAX measure + drill-through)
+
+1. **Home → Get data → More… → Database → Google BigQuery → Connect**.
+2. Leave *Billing Project ID* = `sentrexa` (or blank) → **OK**.
+3. **Sign in → Sign in with Google →** your Owner account → **Connect**.
+4. **Navigator:** expand `sentrexa → analytics`, tick `fact_alerts`,
+   `fact_logs_daily`, `dim_mitre_techniques`, `dim_detection_rules` → **Load**
+   (Import; DirectQuery also works).
+5. **Model view:** create relationships if not auto-detected —
+   `fact_alerts[rule_id] → dim_detection_rules[rule_id]` and
+   `fact_alerts[mitre_technique_id] → dim_mitre_techniques[technique_id]`, both
+   many-to-one, single cross-filter.
+6. **DAX measures** (New measure):
+   ```DAX
+   Mean Time To Resolve (h) = AVERAGE ( fact_alerts[resolution_hours] )
+
+   Open Incidents =
+   CALCULATE ( DISTINCTCOUNT ( fact_alerts[incident_id] ),
+               fact_alerts[incident_status] = "Open" )
+
+   High-Severity Rate =
+   DIVIDE (
+       CALCULATE ( COUNTROWS ( fact_alerts ),
+                   fact_alerts[severity] IN { "high", "critical" } ),
+       COUNTROWS ( fact_alerts )
+   )
+   ```
+7. **Drill-through:** add a page named **Alert detail** with a table of
+   `alert_id, triggered_at, severity, rule_name, technique_name, source_ip,
+   username, incident_status, resolution_hours`. In the *Visualizations →
+   Drill through* well drop `mitre_technique_id` (or `rule_name`). On a summary
+   page, right-click a bar → **Drill through → Alert detail**.
+8. Optionally **Publish** to the Power BI service.
+
+#### 3 — Tableau (Public) — time-of-day attack heatmap (deliberately distinct)
+
+1. **Connect → To a Server → Google BigQuery**.
+2. **Authentication: Sign In with OAuth →** your Google account → **Allow**.
+3. *Billing Project* = `sentrexa`, *Project* = `sentrexa`, *Dataset* = `analytics`.
+4. Drag **`fact_alerts`** to the canvas (no join needed — it's denormalized).
+5. Create calculated fields:
+   ```
+   Hour of Day  =  DATEPART('hour', [Triggered At])
+   Day of Week  =  DATENAME('weekday', [Triggered At])
+   ```
+6. Build the heatmap:
+   * **Columns:** `Hour of Day` (Discrete, 0–23)
+   * **Rows:** `Day of Week` (Discrete; sort Monday→Sunday)
+   * **Marks:** type **Square**; **Color** = `CNT(Alert Id)`; **Label** = `CNT(Alert Id)`
+   * Optional shelf filters: `Severity`, `Rule Type`
+   * A diverging/sequential colour ramp makes the night-time brute-force and
+     off-hours-login clusters obvious at a glance.
+7. Add a companion sheet if you like: bar of `CNT(Alert Id)` by `Tactic`, or a
+   line of `SUM(Event Count)` by `Log Date` from `fact_logs_daily`.
+8. **Server → Tableau Public → Save** for the portfolio link.
+
+> `source_ip` values are RFC 5737 documentation addresses (not geolocatable), so
+> the time-of-day heatmap is the meaningful "distinct" visual rather than a geo map.
+
 ## Security
 
 - No hardcoded credentials — `.env` locally, GitHub Actions / platform secrets in CI/deploy.
@@ -157,6 +333,12 @@ picks them up.
   bcrypt hash.
 - Simulated usernames / IPs are treated as PII; external addresses are drawn
   only from RFC 5737 documentation ranges.
+- **No BigQuery key files** — CI authenticates via Workload Identity Federation
+  (short-lived OIDC token → SA impersonation), local runs and BI tools via your
+  own Google account. `logs_raw` is never exported; only alert-level and
+  aggregated data leaves PostgreSQL.
+- The BigQuery sync reads PostgreSQL only through the read-only role and writes
+  nothing back to it.
 
 ## License
 
