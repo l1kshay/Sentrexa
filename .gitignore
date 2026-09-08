@@ -233,7 +233,12 @@ data/*.scenarios.json
 *.key
 service_account*.json
 gcp-*.json
+gcloud-*.json
 *-sa-key.json
+*key*.json
+*-key.json
+sentrexa-bq-*.json
+application_default_credentials.json
 credentials.json
 
 # Local BI exports / working files
