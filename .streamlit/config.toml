@@ -7,6 +7,12 @@ enableCORS = false
 [browser]
 gatherUsageStats = false
 
+# "declassified terminal" - near-black ground, bone text, oxidised-stamp accent,
+# monospace throughout. Full component styling is in dashboard/ui.py (inject_css).
 [theme]
 base = "dark"
-primaryColor = "#dc2626"
+primaryColor = "#C8402F"
+backgroundColor = "#0C0C0C"
+secondaryBackgroundColor = "#141414"
+textColor = "#E4E1D8"
+font = "monospace"
