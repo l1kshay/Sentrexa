@@ -11,10 +11,18 @@ Run:
 from __future__ import annotations
 
 import os
-from datetime import datetime, time, timezone
+import sys
 
-import plotly.express as px
-import streamlit as st
+# Streamlit Community Cloud runs this file with only dashboard/ on sys.path, not
+# the repo root, so `from dashboard import ...` / `from config import ...` fail.
+# Put the repo root first so every absolute import from a sibling top-level
+# package resolves, both locally and on Streamlit Cloud.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from datetime import datetime, time, timezone  # noqa: E402
+
+import plotly.express as px  # noqa: E402
+import streamlit as st  # noqa: E402
 
 # On Streamlit Community Cloud, secrets arrive via st.secrets - mirror them into
 # the environment so config.settings (env-driven) picks them up unchanged.
