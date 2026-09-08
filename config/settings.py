@@ -139,12 +139,26 @@ class DashboardAuthSettings:
 
 @dataclass(frozen=True)
 class BigQuerySettings:
-    """Phase 7 only. Left unpopulated until then."""
+    """Phase 7 only.
+
+    Authentication is keyless (Application Default Credentials):
+      * local  - `gcloud auth application-default login` (your own Owner account)
+      * CI     - Workload Identity Federation via google-github-actions/auth
+    No service-account key file anywhere.
+    """
 
     project_id: str | None
     dataset: str
     location: str
-    sa_key_b64: str | None
+
+    def require_project(self) -> str:
+        if not self.project_id:
+            raise RuntimeError("GCP_PROJECT_ID is not set (see .env / CI secrets).")
+        return self.project_id
+
+    @property
+    def dataset_ref(self) -> str:
+        return f"{self.require_project()}.{self.dataset}"
 
 
 @dataclass(frozen=True)
@@ -221,7 +235,6 @@ def get_settings() -> Settings:
             project_id=_get("GCP_PROJECT_ID"),
             dataset=_get("BIGQUERY_DATASET", "analytics"),
             location=_get("BIGQUERY_LOCATION", "US"),
-            sa_key_b64=_get("GCP_SA_KEY_B64"),
         ),
     )
 
