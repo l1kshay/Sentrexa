@@ -5,7 +5,7 @@ All authentication is **keyless** — the GCP project enforces
 anywhere. CI uses Workload Identity Federation; local runs and the BI tools use
 your own Google account via ADC / OAuth.
 
-Values used: project `sentrexa` (number `956140125620`), repo
+Values used: project `sentrexa` (number `<PROJECT_NUMBER>`), repo
 `l1kshay/Sentrexa`, dataset location `US`.
 
 ## One-time setup (run as project Owner)
@@ -46,7 +46,7 @@ gcloud iam workload-identity-pools providers create-oidc github-provider \
 gcloud iam service-accounts add-iam-policy-binding \
   sentrexa-bq-sync@sentrexa.iam.gserviceaccount.com \
   --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/956140125620/locations/global/workloadIdentityPools/github-pool/attribute.repository/l1kshay/Sentrexa"
+  --member="principalSet://iam.googleapis.com/projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/attribute.repository/l1kshay/Sentrexa"
 
 # Local keyless auth (opens your browser)
 gcloud auth application-default login
@@ -59,12 +59,11 @@ gcloud auth application-default set-quota-project sentrexa
 |--------|-------|
 | `GCP_PROJECT_ID` | `sentrexa` |
 | `GCP_SYNC_SA` | `sentrexa-bq-sync@sentrexa.iam.gserviceaccount.com` |
-| `GCP_WIF_PROVIDER` | `projects/956140125620/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
+| `GCP_WIF_PROVIDER` | `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
 | `DATABASE_URL_RO` | (already set for the pipeline workflow) |
 
 ## BI tools
 
 Looker Studio, Power BI, and Tableau each connect with **"Sign in with Google"
 (OAuth)** using the project-Owner account. No reader service account, no key
-file. See the README "Connecting the three BI tools" section for step-by-step
-instructions.
+file. Step-by-step: [`docs/BI_CONNECTIONS.md`](../docs/BI_CONNECTIONS.md).
