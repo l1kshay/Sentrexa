@@ -113,6 +113,7 @@ class Alert(Base):
     severity: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="New")
     created_at: Mapped[datetime] = mapped_column(_TS, nullable=False, server_default=text("now()"))
+    updated_at: Mapped[datetime] = mapped_column(_TS, nullable=False, server_default=text("now()"))
     dedup_key: Mapped[str] = mapped_column(Text, nullable=False)
 
     rule: Mapped["DetectionRule"] = relationship(back_populates="alerts")
@@ -155,6 +156,7 @@ class Incident(Base):
     assigned_to: Mapped[str | None] = mapped_column(Text)
     resolution_notes: Mapped[str | None] = mapped_column(Text)
     closed_at: Mapped[datetime | None] = mapped_column(_TS)
+    updated_at: Mapped[datetime] = mapped_column(_TS, nullable=False, server_default=text("now()"))
 
     alert: Mapped["Alert"] = relationship(back_populates="incident")
 

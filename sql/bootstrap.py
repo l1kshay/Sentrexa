@@ -36,6 +36,7 @@ SCHEMA_FILES = [
     "002_rejected_records.sql",
     "003_grants.sql",
     "004_views.sql",
+    "005_bi_sync.sql",
 ]
 _SAFE_PW = re.compile(r"^[A-Za-z0-9_-]+$")
 
