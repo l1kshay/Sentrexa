@@ -76,6 +76,16 @@ TABLES: dict[str, list[bigquery.SchemaField]] = {
     "dim_detection_rules": DIM_DETECTION_RULES,
 }
 
+# Internal bookkeeping table - the incremental-sync watermark. Not part of the
+# star schema; the BI tools never read it.
+SYNC_STATE = "_sync_state"
+SYNC_STATE_SCHEMA = [
+    _F("target_name", "STRING", mode="REQUIRED"),
+    _F("last_synced_at", "TIMESTAMP"),
+    _F("rows_synced", "INT64"),
+    _F("last_run_at", "TIMESTAMP"),
+]
+
 # natural key(s) used by the sync MERGE
 MERGE_KEYS: dict[str, list[str]] = {
     "fact_alerts": ["alert_id"],
@@ -111,6 +121,11 @@ def create_schema() -> list[str]:
     for name in TABLES:
         client.create_table(_table(name), exists_ok=True)
         created.append(table_ref(name))
+
+    client.create_table(
+        bigquery.Table(table_ref(SYNC_STATE), schema=SYNC_STATE_SCHEMA), exists_ok=True
+    )
+    created.append(table_ref(SYNC_STATE))
     return created
 
 
